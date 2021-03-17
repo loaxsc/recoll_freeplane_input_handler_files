@@ -111,9 +111,12 @@
 			</xsl:if>
 
 			<xsl:if test="not(arrowlink/@DESTINATION)">
-			  <pre>
-				<xsl:value-of select="$nodetext"/>
-			</pre>
+				<!--<pre><xsl:value-of select="$nodetext"/></pre>-->
+				<div>
+					<xsl:call-template name="tokenize">
+						<xsl:with-param name="text" select="$nodetext"/>
+					</xsl:call-template>
+				</div>
 			</xsl:if>
         </xsl:if>
 
@@ -141,5 +144,20 @@
       </xsl:attribute>
     </img>
   </xsl:template>
-
+	<xsl:template name="tokenize">
+		<xsl:param name="text"/>
+		<xsl:param name="delimiter" select="'&#10;'"/>
+			<xsl:variable name="token" select="normalize-space(substring-before(concat($text, $delimiter), $delimiter))" />
+			<xsl:if test="$token">
+				<p>
+					<xsl:value-of select="$token"/>
+				</p>
+			</xsl:if>
+			<xsl:if test="contains($text, $delimiter)">
+				<!-- recursive call -->
+				<xsl:call-template name="tokenize">
+					<xsl:with-param name="text" select="substring-after($text, $delimiter)"/>
+				</xsl:call-template>
+			</xsl:if>
+	</xsl:template>
 </xsl:stylesheet>
