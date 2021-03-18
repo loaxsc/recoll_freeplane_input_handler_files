@@ -1,0 +1,3 @@
+#!/bin/sh
+
+sed 's/&nbsp;/\&#160;/g' $1 | xsltproc /home/loaxsc/bin/mm2html.xsl -

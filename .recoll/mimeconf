@@ -1,0 +1,4 @@
+[index]
+application/x-freeplane = exec mm2html; mimetype = text/html; charset = utf-8
+ [icons]
+application/x-freeplane = freeplane
