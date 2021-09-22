@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
+<!-- Work on xsltproc -->
 
 <!--
     MINDMAPEXPORTFILTER html;htm %xslt_export.html
@@ -81,6 +82,7 @@
     <xsl:variable name="fontitalic" select="font/@ITALIC"/>
     <xsl:variable name="fontsize" select="font/@SIZE"/>
     <xsl:variable name="target" select="arrowlink/@DESTINATION"/>
+    <xsl:variable name="urlarror">←</xsl:variable>
     <ul><li>
     <xsl:attribute name="id">
       <xsl:value-of select="$thisid"/>
@@ -90,6 +92,9 @@
         <xsl:value-of select="translate(@STYLE_REF,' ','_')"/>
       </xsl:attribute>
     </xsl:if>
+	<xsl:if test="@LINK">
+		<a><xsl:attribute name="href"><xsl:value-of select="@LINK"/></xsl:attribute>←</a>
+	</xsl:if>
     <xsl:if test="@TEXT">
       <xsl:if test="arrowlink/@DESTINATION != ''">
         <a>
@@ -147,7 +152,8 @@
   <xsl:template match="hook[@NAME='ExternalObject']">
       <img>
       <xsl:attribute name="src">
-       <xsl:value-of select="@URI" disable-output-escaping="yes"/>
+       <xsl:value-of select="@URI"/>
+       <!--<xsl:value-of select="@URI" disable-output-escaping="yes"/>-->
       </xsl:attribute>
       </img>
   </xsl:template>

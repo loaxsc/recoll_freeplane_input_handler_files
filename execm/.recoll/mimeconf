@@ -1,0 +1,9 @@
+# Recoll config file
+
+[index]
+application/x-freeplane = execm rclMM
+application/x-freeplane-doc = internal text/html
+
+[icons]
+application/x-freeplane = freeplane
+application/x-freeplane-doc = freeplane

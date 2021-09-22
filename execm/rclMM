@@ -1,0 +1,158 @@
+#!/usr/bin/python3
+xsl_path = '/usr/share/recoll/filters/mm2html.xsl'
+rclmm_dir = '/usr/share/recoll/filters'
+
+import sys, os, re, html
+import subprocess as sp
+
+sys.path.append(rclmm_dir)
+from lxml import etree
+import rclexecm
+
+
+def inner_xml(tag):
+    return ''.join(etree.tostring(e).decode() for e in tag)
+
+class rclMM:
+    def __init__(self, em):
+        self.em = em
+
+    def openfile(self, params):
+        filename_abs = params['filename'].decode()
+        filename = os.path.basename(filename_abs)
+        self.currentindex = -1
+        try:
+            f = open(filename_abs, "r")
+        except Exception as err:
+            self.em.rclog("openfile: open failed: [%s]" % err)
+            return False
+
+        root = etree.XML(f.read().replace(r'&nbsp;',r'&#160;'))
+        self.docs = [] # export rclnote into items 0f self.docs
+        self.ipath_t = {}
+        for i,e in enumerate(root.findall('.//node[@STYLE_REF="rclnote"]')):
+            doc_i = ''
+            ipath = e.attrib['ID']
+            self.ipath_t[ipath] = i
+            if e.attrib.has_key('TEXT'):
+                nr = e.attrib['TEXT'].split('\n')
+                title = nr[0]
+                nr = '\n'.join(nr[1:])
+                doc_i = f"<h1>{html.escape(title)}</h1><div class='node'><pre>{nr}</pre></div>"
+                del(e.attrib['TEXT'])
+            else:
+                nr = e.find('./richcontent[@TYPE="NODE"]/html/body')
+                title = nr[0].xpath('string()').strip()
+                doc_i = f"<h1>{html.escape(title)}</h1><div class='node'>{inner_xml(nr[1:])}</div>"
+            nr = e.find('./richcontent[@TYPE="DETAILS"]/html/body')
+            if nr is not None:
+                doc_i += f"<div class='details'>{inner_xml(nr)}</div>"
+            nr = e.find('./richcontent[@TYPE="NOTE"]/html/body')
+            if nr is not None:
+                doc_i += f"<div class='note'>{inner_xml(nr)}</div>"
+            doc_i = ['<html>',
+                     '  <head>',
+                     '    <meta http-equiv=Content-Type content=text/html;charset=UTF-8/>',
+                    f'    <meta name=title content="{filename} {title}"/>',
+                     '  </head>',
+                     '  <body>',
+                    f'    {doc_i}',
+                     '  </body>',
+                     '</html>',]
+            doc_i = '\n'.join(doc_i)
+            self.docs.append({'ipath': ipath, 'html' : doc_i})
+
+            # modify the content of rclnote to title
+            for r in e.findall('./richcontent'):
+                r.getparent().remove(r)
+            nr = ['<richcontent TYPE="NODE">',
+                  '<html><head></head><body>',
+                 f'<p>{html.escape(title)} <a href="file://{filename_abs}#{ipath}" style="color: red">⮥</a></p>',
+                  '</body></html>',
+                  '</richcontent>',]
+            try:
+                e.insert(0, etree.fromstring('\n'.join(nr)))
+            except:
+                self.em.rclog(etree.tostring(e))
+                self.em.rclog('\n'.join(nr))
+
+
+        # handle the link of node
+        for e in root.findall('.//node[@LINK]'):
+            link = html.escape(e.attrib["LINK"])
+            if e.attrib.has_key('TEXT'):
+                text = html.escape(e.attrib["TEXT"])
+                nr = ['<richcontent TYPE="NODE">',
+                      '<html><head></head><body>',
+                     f'<pre><a href=\'{link}\'>←</a> {text}</pre>',
+                      '</body></html>',
+                      '</richcontent>',]
+                try:
+                    e.insert(0, etree.fromstring('\n'.join(nr)))
+                except:
+                    self.em.rclog('\n'.join(nr))
+                del(e.attrib['TEXT'])
+            else:
+                p = e.find('.//p')
+                a = etree.fromstring(f'<a href="{link}">←</a>')
+                a.tail = f' {p.text.lstrip()}'
+                p.text = ''
+                p.insert(0, a)
+            del(e.attrib['LINK'])
+
+        # transform the whole mm file to the last doc.
+        ipath = root.find('node').attrib['ID']
+        mm2html = sp.check_output(f'xsltproc {xsl_path} -',
+                                  input=etree.tostring(root), shell=True).decode()
+        mm2html = (mm2html[:78] +
+                  f'<meta name=title content="{filename} Root"' +
+                   mm2html[78:])
+
+        self.docs.append({'ipath': ipath, 'html' : mm2html})
+        self.ipath_t[ipath] = len(self.ipath_t)
+
+        return True
+
+    def getnext(self, params):
+        """ !Note that the self doc has an *empty* ipath """
+        if self.currentindex == -1:
+            self.currentindex = 0
+            if len(self.docs) == 0:
+                eof = rclexecm.RclExecM.eofnext
+            else:
+                eof = rclexecm.RclExecM.noteof
+            return (True, "", "", eof)
+
+        if self.currentindex >= len(self.docs):
+            return (False, "", "", rclexecm.RclExecM.eofnow)
+        else:
+            ret= self.extractone(self.currentindex)
+            self.currentindex += 1
+            return ret
+
+    def getipath(self, params):
+        return self.extractone(self.ipath_t[params['ipath'].decode()])
+
+    def extractone(self, dno):
+        """Extract one doc from the mm file"""
+        # Need to specify the MIME type here. This would not be
+        # necessary if the ipath was a file name with a usable
+        # extension.
+        # self.em.setmimetype("text/html")
+        self.em.setmimetype("application/x-freeplane-doc")
+        # self.em.setfield(nm, value)
+
+        # Warning of upcoming eof saves one roundtrip
+        iseof = rclexecm.RclExecM.noteof
+        if dno == len(self.docs) - 1:
+            iseof = rclexecm.RclExecM.eofnext
+
+        try:
+            return (True, self.docs[dno]['html'], self.docs[dno]['ipath'], iseof)
+        except Exception as err:
+            self.em.rclog("extractone: failed: [%s]" % err)
+            return (False, "", self.docs[dno]['ipath'], iseof)
+
+proto = rclexecm.RclExecM()
+extract = rclMM(proto)
+rclexecm.main(proto, extract)

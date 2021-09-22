@@ -1,0 +1,5 @@
+xallexcepts+ = application/x-freeplane application/x-freeplane-doc
+
+[view]
+application/x-freeplane = /home/loaxsc/.local/Programs/freeplane/freeplane.sh %f
+application/x-freeplane-doc = /home/loaxsc/.local/Programs/freeplane/freeplane.sh %f#%i
